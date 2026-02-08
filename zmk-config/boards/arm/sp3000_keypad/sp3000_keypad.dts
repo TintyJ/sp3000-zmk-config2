@@ -1,0 +1,198 @@
+/*
+ * SP3000 Scanner Keypad - Board Devicetree
+ * 
+ * MCU: E73-2G4M08S1C (nRF52840)
+ * Matrix: 5 rows x 10 columns, row2col diodes
+ * Encoder: EC11 rotary with push switch
+ * LEDs: 43x SK6812Mini-E (via 74AHCT1G125 level shifter)
+ * Battery: BQ24075 charger + MAX17048 fuel gauge + TPS63020 PSU
+ * Crystal: 32.768 KHz on XL1/XL2 (P0.00/P0.01)
+ *
+ * Designed by Ceynetics (CS2025A Rev.A)
+ * GPIO mapping extracted from KEYPAD.kicad_sch + KEY_MATRIX.kicad_sch
+ */
+
+/dts-v1/;
+#include <nordic/nrf52840_qiaa.dtsi>
+#include <dt-bindings/zmk/matrix_transform.h>
+#include <dt-bindings/led/led.h>
+
+/ {
+    model = "SP3000 Keypad";
+    compatible = "ceynetics,sp3000-keypad";
+
+    chosen {
+        zephyr,code-partition = &code_partition;
+        zephyr,sram = &sram0;
+        zephyr,flash = &flash0;
+        zephyr,console = &cdc_acm_uart;
+        zmk,kscan = &kscan0;
+        zmk,matrix-transform = &default_transform;
+        zmk,underglow = &led_strip;
+        zmk,battery = &fuelgauge;
+    };
+
+    default_transform: keymap_transform_0 {
+        compatible = "zmk,matrix-transform";
+        columns = <10>;
+        rows = <5>;
+
+        /*
+         * Full 5x10 grid. Unused positions get &none in the keymap.
+         * Actual physical-to-matrix mapping TBD after evtest capture.
+         */
+        map = <
+            RC(0,0) RC(0,1) RC(0,2) RC(0,3) RC(0,4) RC(0,5) RC(0,6) RC(0,7) RC(0,8) RC(0,9)
+            RC(1,0) RC(1,1) RC(1,2) RC(1,3) RC(1,4) RC(1,5) RC(1,6) RC(1,7) RC(1,8) RC(1,9)
+            RC(2,0) RC(2,1) RC(2,2) RC(2,3) RC(2,4) RC(2,5) RC(2,6) RC(2,7) RC(2,8) RC(2,9)
+            RC(3,0) RC(3,1) RC(3,2) RC(3,3) RC(3,4) RC(3,5) RC(3,6) RC(3,7) RC(3,8) RC(3,9)
+            RC(4,0) RC(4,1) RC(4,2) RC(4,3) RC(4,4) RC(4,5) RC(4,6) RC(4,7) RC(4,8) RC(4,9)
+        >;
+    };
+
+    /*
+     * Key Scan Matrix — GPIO Pin Mapping
+     * ════════════════════════════════════
+     * Extracted from KiCad schematic by matching global label positions
+     * to E73-2G4M08S1C pin absolute coordinates (U1 at 199.39, 132.08).
+     *
+     * Rows (active-high outputs):
+     *   ROW0 = P1.00   ROW1 = P1.04   ROW2 = P1.06
+     *   ROW3 = P1.09   ROW4 = P1.11
+     *
+     * Columns (active-high inputs with pull-down):
+     *   COL0 = P1.10   COL1 = P0.28   COL2 = P1.13   COL3 = P0.29
+     *   COL4 = P0.31   COL5 = P0.30   COL6 = P0.07   COL7 = P0.13
+     *   COL8 = P0.24   COL9 = P0.09
+     *
+     * Encoder:  ENC_A = P0.22   ENC_B = P0.20
+     * LED data: P1.02 (via 74AHCT1G125 level shifter to 5V)
+     * I2C:      SDA = P0.02   SCL = P0.03  (MAX17048 fuel gauge)
+     *
+     * Diode direction: row2col (D_Small at 270°, cathode toward row wire)
+     */
+    kscan0: kscan_0 {
+        compatible = "zmk,kscan-gpio-matrix";
+        wakeup-source;
+        diode-direction = "row2col";
+
+        row-gpios
+            = <&gpio1  0 GPIO_ACTIVE_HIGH>   /* ROW0 — P1.00 */
+            , <&gpio1  4 GPIO_ACTIVE_HIGH>   /* ROW1 — P1.04 */
+            , <&gpio1  6 GPIO_ACTIVE_HIGH>   /* ROW2 — P1.06 */
+            , <&gpio1  9 GPIO_ACTIVE_HIGH>   /* ROW3 — P1.09 */
+            , <&gpio1 11 GPIO_ACTIVE_HIGH>   /* ROW4 — P1.11 */
+            ;
+
+        col-gpios
+            = <&gpio1 10 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>  /* COL0 — P1.10 */
+            , <&gpio0 28 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>  /* COL1 — P0.28 */
+            , <&gpio1 13 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>  /* COL2 — P1.13 */
+            , <&gpio0 29 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>  /* COL3 — P0.29 */
+            , <&gpio0 31 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>  /* COL4 — P0.31 */
+            , <&gpio0 30 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>  /* COL5 — P0.30 */
+            , <&gpio0  7 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>  /* COL6 — P0.07 */
+            , <&gpio0 13 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>  /* COL7 — P0.13 */
+            , <&gpio0 24 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>  /* COL8 — P0.24 */
+            , <&gpio0  9 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>  /* COL9 — P0.09 */
+            ;
+    };
+
+    /* Rotary Encoder — EC11E09244BS */
+    sensors: sensors {
+        compatible = "zmk,keymap-sensors";
+        sensors = <&encoder>;
+        triggers-per-rotation = <20>;
+    };
+
+    encoder: encoder_0 {
+        compatible = "alps,ec11";
+        a-gpios = <&gpio0 22 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;  /* ENC_A — P0.22 */
+        b-gpios = <&gpio0 20 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;  /* ENC_B — P0.20 */
+        steps = <80>;
+        status = "okay";
+    };
+};
+
+/* ── USB ────────────────────────────────────────────────── */
+&usbd {
+    status = "okay";
+    cdc_acm_uart: cdc_acm_uart {
+        compatible = "zephyr,cdc-acm-uart";
+    };
+};
+
+/* ── I2C0 — MAX17048 fuel gauge (addr 0x36) ──────────── */
+&i2c0 {
+    compatible = "nordic,nrf-twi";
+    status = "okay";
+    pinctrl-0 = <&i2c0_default>;
+    pinctrl-names = "default";
+
+    fuelgauge: max17048@36 {
+        compatible = "maxim,max17048";
+        reg = <0x36>;
+        status = "okay";
+    };
+};
+
+/* ── SPI3 — SK6812Mini-E LED strip (43 LEDs) ─────────── */
+&spi3 {
+    compatible = "nordic,nrf-spim";
+    status = "okay";
+    pinctrl-0 = <&spi3_default>;
+    pinctrl-names = "default";
+
+    led_strip: ws2812@0 {
+        compatible = "worldsemi,ws2812-spi";
+        reg = <0>;
+        spi-max-frequency = <4000000>;
+        chain-length = <43>;
+        spi-one-frame = <0x70>;
+        spi-zero-frame = <0x40>;
+        color-mapping = <LED_COLOR_ID_GREEN LED_COLOR_ID_RED LED_COLOR_ID_BLUE>;
+    };
+};
+
+/* ── Pin Control ─────────────────────────────────────── */
+&pinctrl {
+    i2c0_default: i2c0_default {
+        group1 {
+            psels = <NRF_PSEL(TWIM_SDA, 0, 2)>,    /* SDA — P0.02 */
+                    <NRF_PSEL(TWIM_SCL, 0, 3)>;     /* SCL — P0.03 */
+        };
+    };
+
+    spi3_default: spi3_default {
+        group1 {
+            psels = <NRF_PSEL(SPIM_MOSI, 1, 2)>,    /* LED_DATA — P1.02 (→ level shifter → LEDs) */
+                    <NRF_PSEL(SPIM_SCK,  0, 5)>,     /* Unused SCK — P0.05 (free pin) */
+                    <NRF_PSEL(SPIM_MISO, 0, 26)>;    /* Unused MISO — P0.26 (free pin) */
+        };
+    };
+};
+
+/* ── Flash partitions ────────────────────────────────── */
+&flash0 {
+    partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        sd_partition: partition@0 {
+            reg = <0x00000000 0x00001000>;
+        };
+
+        code_partition: partition@1000 {
+            reg = <0x00001000 0x000d3000>;
+        };
+
+        storage_partition: partition@d4000 {
+            reg = <0x000d4000 0x00020000>;
+        };
+
+        boot_partition: partition@f4000 {
+            reg = <0x000f4000 0x0000c000>;
+        };
+    };
+};

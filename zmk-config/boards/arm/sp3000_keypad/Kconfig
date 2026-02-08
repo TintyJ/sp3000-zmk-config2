@@ -1,0 +1,3 @@
+config BOARD_SP3000_KEYPAD
+    bool "SP3000 Scanner Keypad"
+    depends on SOC_NRF52840_QIAA
